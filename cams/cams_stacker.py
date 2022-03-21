@@ -2,6 +2,7 @@ from typing import List, Optional
 
 import numpy as np
 import torch
+from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import StratifiedKFold
@@ -35,6 +36,7 @@ class WeightEstimator(BaseEstimator):
         verbose: bool = True,
     ) -> None:
         self.hidden_layer_size = hidden_layer_size
+        self.batch_size = batch_size
         self.verbose = verbose
         self.scaler: StandardScaler = None
 
@@ -131,12 +133,15 @@ class CAMSStacker(BaseEstimator):
             y_train = y[idx_train]
             y_valid = y[idx_valid]
 
-            self.cal_estimators = [
-                CalibratedClassifierCV(
-                    e, method=self.calibration_method, cv=self.cv
-                ).fit(X_train, y_train)
+            self.cal_estimators = Parallel()(
+                delayed(
+                    CalibratedClassifierCV(
+                        e, method=self.calibration_method, cv=self.cv
+                    ).fit
+                )(X_train, y_train)
                 for e in self.base_estimators
-            ]
+            )
+
             all_clf_truth_fold = self.calculate_estimator_weights(X_valid, y_valid)
             all_clf_truth.append(all_clf_truth_fold)
 
@@ -148,12 +153,14 @@ class CAMSStacker(BaseEstimator):
 
         # Re-fit with full-dataset
         if self.refit:
-            self.cal_estimators = [
-                CalibratedClassifierCV(
-                    e, method=self.calibration_method, cv=self.cv
-                ).fit(X, y)
+            self.cal_estimators = Parallel()(
+                delayed(
+                    CalibratedClassifierCV(
+                        e, method=self.calibration_method, cv=self.cv
+                    ).fit
+                )(X, y)
                 for e in self.base_estimators
-            ]
+            )
 
         self.is_fitted_ = True
         return self
