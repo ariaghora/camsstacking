@@ -1,3 +1,8 @@
+"""
+This module contains the class for CAMSStacker, a model stacking algorithm that
+makes use of neural network to estimate the importance of each base model.
+
+"""
 from typing import List, Optional
 
 import numpy as np
@@ -10,7 +15,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from tqdm import tqdm
 
 
-class WeightEstimator(BaseEstimator):
+class _WeightEstimator(BaseEstimator):
     """Estimate each base estimator's weight for each sample
 
     The weight estimator is implemented as a neural network with two hidden layers.
@@ -32,9 +37,25 @@ class WeightEstimator(BaseEstimator):
         self.device = device
         self.verbose = verbose
         self.scaler: StandardScaler = None
-        self.weight_estimator: WeightEstimator = None
+        self.net: _WeightEstimator = None
 
-    def fit(self, X: np.ndarray, y_weights: np.ndarray) -> "WeightEstimator":
+    def build_network(self, input_neurons: int, output_neurons: int) -> torch.nn.Module:
+        """
+        The network is a simple feed-forward neural network with two hidden layers.
+        TODO: provide flexibility to the user to choose the number of hidden layers,
+              even the whole network architecture.
+        """
+        net = torch.nn.Sequential(
+            torch.nn.Linear(input_neurons, self.hidden_layer_size),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(self.hidden_layer_size, self.hidden_layer_size),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(self.hidden_layer_size, output_neurons),
+            torch.nn.Sigmoid(),
+        ).to(self.device)
+        return net
+
+    def fit(self, X: np.ndarray, y_weights: np.ndarray) -> "_WeightEstimator":
         """
         Fit the weight estimator on the training data
         """
@@ -48,18 +69,8 @@ class WeightEstimator(BaseEstimator):
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # Initialize the Sequential model of the neural network.
-        # The network is a simple feed-forward neural network with two hidden layers.
-        # TODO: provide flexibility to the user to choose the number of hidden layers,
-        #       even the whole network architecture.
-        self.weight_estimator = torch.nn.Sequential(
-            torch.nn.Linear(X_nn.shape[1], self.hidden_layer_size),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(self.hidden_layer_size, self.hidden_layer_size),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(self.hidden_layer_size, y_weights.shape[1]),
-            torch.nn.Sigmoid(),
-        ).to(self.device)
-        optim = torch.optim.Adam(self.weight_estimator.parameters())
+        self.net = self.build_network(X_nn.shape[1], y_weights.shape[1])
+        optim = torch.optim.Adam(self.net.parameters())
         loss_fn = torch.nn.BCELoss().to(self.device)
 
         # We specify the batch_size for the user when they did not specify it.
@@ -69,7 +80,7 @@ class WeightEstimator(BaseEstimator):
         for epoch in tqdm(range(500), disable=(not self.verbose)):
             for iter in range(0, X_nn.shape[0], self.batch_size):
                 optim.zero_grad()
-                y_hat = self.weight_estimator(
+                y_hat = self.net(
                     torch.from_numpy(X_nn[iter : iter + self.batch_size])
                     .float()
                     .to(self.device)
@@ -90,12 +101,10 @@ class WeightEstimator(BaseEstimator):
         """
         X_transformed = self.scaler.transform(X)
 
-        self.weight_estimator.eval()
+        self.net.eval()
         with torch.no_grad():
             y_weights_hat = (
-                self.weight_estimator(
-                    torch.from_numpy(X_transformed).float().to(self.device)
-                )
+                self.net(torch.from_numpy(X_transformed).float().to(self.device))
                 .cpu()
                 .numpy()
             )
@@ -105,6 +114,11 @@ class WeightEstimator(BaseEstimator):
 
 class CAMSStacker(BaseEstimator):
     """
+    CAMSStacker is a model stacking algorithm that combines the outputs from
+    multiple base estimators. A neural network is trained to estimate the weight
+    of each base estimator for each sample. The weights are then used to
+    determine the importance of each base estimator's output.
+
     Parameters
     ----------
     base_estimators : List[Any]
@@ -121,6 +135,7 @@ class CAMSStacker(BaseEstimator):
         The batch size for the training. If None, the batch size is set to
         the min(200, n_samples).
     verbose : bool, optional
+        If True, the progress of the training is shown.
 
     """
 
@@ -146,7 +161,7 @@ class CAMSStacker(BaseEstimator):
         self.device = device
         self.verbose = verbose
 
-        self.weight_estimator: WeightEstimator = None
+        self.weight_estimator: _WeightEstimator = None
         self.encoder: OneHotEncoder = None
         self.cal_estimators: BaseEstimator = None
         self.is_fitted_ = False
@@ -162,9 +177,11 @@ class CAMSStacker(BaseEstimator):
             ]
         )
 
+        # Supress warnings about the zero division. It is expected that sometimes
+        # for some samples, base estimators are not able to predict the target
+        # variable. We will replace NaN values with some constant.
         with np.errstate(divide="ignore", invalid="ignore"):
             result = result / result.sum(1, keepdims=True)
-
         nan_replacement = 1 / result.shape[1]
         result = np.nan_to_num(result, nan=nan_replacement)
         return result
@@ -175,15 +192,17 @@ class CAMSStacker(BaseEstimator):
         """
         self.encoder = OneHotEncoder().fit(y.reshape(-1, 1))
 
-        all_clf_truth = []
+        estimator_weights = []
         for idx_train, idx_valid in StratifiedKFold(
             n_splits=self.cv_stacking, shuffle=False
         ).split(X, y):
             X_train, X_valid = X[idx_train], X[idx_valid]
             y_train, y_valid = y[idx_train], y[idx_valid]
 
-            # Parallelly fit the calibrated estimators using the training and validation
-            # folds.
+            # Some estimators such as decision tree and SVM usually output overconfident
+            # probabilities. We use the calibration method to reduce such an issue.
+            # In this case, we parallelly fit the calibrated estimators using sklearn's
+            # CalibratedClassifierCV using cross-validation.
             self.cal_estimators = Parallel()(
                 delayed(
                     CalibratedClassifierCV(
@@ -193,19 +212,26 @@ class CAMSStacker(BaseEstimator):
                 for e in self.base_estimators
             )
 
-            all_clf_truth_fold = self.calculate_estimator_weights(X_valid, y_valid)
-            all_clf_truth.append(all_clf_truth_fold)
+            # Collect the "ground-truth" weights of each base estimator for current fold
+            estimator_weight_per_fold = self.calculate_estimator_weights(
+                X_valid, y_valid
+            )
+            estimator_weights.append(estimator_weight_per_fold)
 
-        y_weights = np.vstack(all_clf_truth)
+        # Stack the estimator weights from each fold as a np.ndarray.
+        # This will be the target variable for the neural network.
+        y_weights = np.vstack(estimator_weights)
 
-        self.weight_estimator = WeightEstimator(
+        # Train the neural net for weight estimation
+        self.weight_estimator = _WeightEstimator(
             hidden_layer_size=self.hidden_layer_size,
             batch_size=self.batch_size,
             device=self.device,
             verbose=self.verbose,
         ).fit(X, y_weights)
 
-        # Re-fit with full-dataset if requested
+        # Finally, re-fit (calibrated) base estimators with full-dataset if
+        # refit is True.
         if self.refit:
             self.cal_estimators = Parallel()(
                 delayed(
@@ -229,5 +255,6 @@ class CAMSStacker(BaseEstimator):
             ]
         )
 
+        # Finally return the discrete class predictions
         labels = self.encoder.inverse_transform(weighted_votes).squeeze()
         return labels
