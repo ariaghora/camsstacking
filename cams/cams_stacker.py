@@ -6,11 +6,12 @@ makes use of neural network to estimate the importance of each base model.
 from typing import List, Optional
 
 import numpy as np
-from sklearn.exceptions import NotFittedError
 import torch
 from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.exceptions import NotFittedError
+from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from tqdm import tqdm
@@ -39,6 +40,7 @@ class _WeightEstimator(BaseEstimator):
         self.verbose = verbose
         self.scaler: StandardScaler = None
         self.net: _WeightEstimator = None
+        self.losses: List[float] = None
 
     def build_network(self, input_neurons: int, output_neurons: int) -> torch.nn.Module:
         """
@@ -78,7 +80,9 @@ class _WeightEstimator(BaseEstimator):
         if self.batch_size is None:
             self.batch_size = min(200, X_nn.shape[0])
 
+        self.losses = []
         for epoch in tqdm(range(500), disable=(not self.verbose)):
+            losses_epoch = []
             for iter in range(0, X_nn.shape[0], self.batch_size):
                 optim.zero_grad()
                 y_hat = self.net(
@@ -94,6 +98,9 @@ class _WeightEstimator(BaseEstimator):
                 )
                 loss.backward()
                 optim.step()
+
+                losses_epoch.append(loss.item())
+            self.losses.append(np.mean(losses_epoch))
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -151,6 +158,7 @@ class CAMSStacker(BaseEstimator):
         hidden_layer_size: int = 100,
         device: Optional[str] = None,
         verbose: bool = True,
+        n_jobs: int = 1,
     ) -> None:
         self.base_estimators = base_estimators
         self.calibration_method = calibration_method
@@ -161,6 +169,7 @@ class CAMSStacker(BaseEstimator):
         self.hidden_layer_size = hidden_layer_size
         self.device = device
         self.verbose = verbose
+        self.n_jobs = n_jobs
 
         self.weight_estimator: _WeightEstimator = None
         self.encoder: OneHotEncoder = None
@@ -204,7 +213,7 @@ class CAMSStacker(BaseEstimator):
             # probabilities. We use the calibration method to reduce such an issue.
             # In this case, we parallelly fit the calibrated estimators using sklearn's
             # CalibratedClassifierCV using cross-validation.
-            self.cal_estimators = Parallel()(
+            self.cal_estimators = Parallel(n_jobs=self.n_jobs)(
                 delayed(
                     CalibratedClassifierCV(
                         e, method=self.calibration_method, cv=self.cv_calibration
@@ -234,7 +243,7 @@ class CAMSStacker(BaseEstimator):
         # Finally, re-fit (calibrated) base estimators with full-dataset if
         # refit is True.
         if self.refit:
-            self.cal_estimators = Parallel()(
+            self.cal_estimators = Parallel(n_jobs=self.n_jobs)(
                 delayed(
                     CalibratedClassifierCV(
                         e, method=self.calibration_method, cv=self.cv_calibration
@@ -280,3 +289,6 @@ class CAMSStacker(BaseEstimator):
         # Finally return the discrete class predictions
         labels = self.encoder.inverse_transform(weighted_votes).squeeze()
         return labels
+
+    def score(self, X, y) -> float:
+        return accuracy_score(y, self.predict(X))
