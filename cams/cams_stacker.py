@@ -147,7 +147,7 @@ class CAMSStacker(BaseEstimator):
         cv_stacking: int = 5,
         refit: bool = True,
         batch_size: Optional[int] = None,
-        hidden_layer_size: int = 50,
+        hidden_layer_size: int = 100,
         device: Optional[str] = None,
         verbose: bool = True,
     ) -> None:

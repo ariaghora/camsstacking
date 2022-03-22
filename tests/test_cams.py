@@ -41,3 +41,12 @@ def test_predict() -> None:
     ).fit(X, y)
 
     assert clf.predict(X).shape == (X.shape[0],)
+
+
+def test_predict_proba() -> None:
+    X, y = get_dataset()
+    clf = CAMSStacker(
+        base_estimators=[LogisticRegression(), DecisionTreeClassifier()]
+    ).fit(X, y)
+
+    assert clf.predict_proba(X).shape == (X.shape[0], 3)
