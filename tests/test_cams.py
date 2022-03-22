@@ -1,17 +1,9 @@
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from cams import CAMSStacker
 from typing import Tuple
+
+import numpy as np
 from sklearn.datasets import make_classification
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.naive_bayes import GaussianNB
-
-from sklearn.model_selection import (
-    RepeatedStratifiedKFold,
-    cross_val_score,
-    train_test_split,
-)
 
 
 def get_dataset() -> Tuple[np.ndarray, np.ndarray]:
