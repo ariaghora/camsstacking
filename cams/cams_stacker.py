@@ -52,7 +52,7 @@ class _WeightEstimator(BaseEstimator):
         """
         net = torch.nn.Sequential(
             torch.nn.Linear(input_neurons, self.hidden_layer_size),
-            torch.nn.LeakyReLU(),
+            torch.nn.ReLU(),
             torch.nn.Linear(self.hidden_layer_size, output_neurons),
             torch.nn.Softmax(1),
         ).to(self.device)
