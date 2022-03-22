@@ -246,6 +246,7 @@ class CAMSStacker(BaseEstimator):
             hidden_layer_size=self.hidden_layer_size,
             batch_size=self.batch_size,
             device=self.device,
+            n_iter=self.n_iter,
             verbose=self.verbose,
         ).fit(X, y_weights)
 

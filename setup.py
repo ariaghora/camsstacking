@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="cams",
     version="0.1",
-    packages=find_packages(exclude=["tests*"]),
+    packages=find_packages(exclude=["tests*", "experiment*"]),
     license="MIT",
     description="CAMSStacker",
     # long_description=open("README.md").read(),

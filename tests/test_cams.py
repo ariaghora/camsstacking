@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.datasets import make_classification
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
+from cams import CAMSStacker
 
 
 def get_dataset() -> Tuple[np.ndarray, np.ndarray]:
