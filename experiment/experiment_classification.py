@@ -5,7 +5,7 @@ import os
 import sys
 from typing import List, Optional
 
-from lightgbm import LGBMClassifier
+import matplotlib.pyplot as plt
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
@@ -24,16 +24,16 @@ from experiment.experiment_data_loader import available_datasets, get_dataset
 from tqdm import tqdm
 
 base_estimators = [
-    LogisticRegression(penalty="l1", C=0.1, solver="liblinear"),
-    LogisticRegression(penalty="l2", C=0.1),
+    LogisticRegression(),
     DecisionTreeClassifier(),
     GaussianNB(),
 ]
 
 cams_stacker_params = {
+    "calibration_method": "sigmoid",
     "base_estimators": base_estimators,
     "hidden_layer_size": 200,
-    "n_iter": 1000,
+    "n_iter": 3000,
     "n_jobs": 1,
     "verbose": False,
 }
@@ -42,11 +42,12 @@ linear_stack_params = {"estimators": [(str(e), e) for e in base_estimators]}
 
 
 def run_training(datasets: Optional[List[str]] = None, random_state: int = 1) -> None:
-
     if datasets is None:
         datasets = available_datasets
 
     training_result = pd.DataFrame(index=datasets)
+
+    os.makedirs("output", exist_ok=True)
 
     for dataset_name in tqdm(datasets):
         # show dataset name in the progress bar
@@ -65,10 +66,11 @@ def run_training(datasets: Optional[List[str]] = None, random_state: int = 1) ->
         training_result.loc[dataset_name, "cams_stacker"] = score_cams_stacker
         training_result.loc[dataset_name, "linear_stacker"] = score_linear_stacker
 
-        import matplotlib.pyplot as plt
-
+        # Save loss history
         plt.plot(cams_stacker.weight_estimator.losses)
-        plt.show()
+        plt.xlabel("Iteration")
+        plt.savefig(f"output/{dataset_name}_loss.png")
+        plt.close()
 
     training_result.to_csv("output/training_result.csv")
     print("Training result saved to output/training_result.csv")

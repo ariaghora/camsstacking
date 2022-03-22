@@ -49,7 +49,8 @@ available_datasets = list(dataset_loader_dict.keys())
 
 
 def get_dataset(
-    dataset_name: str, random_state: int = 1,
+    dataset_name: str,
+    random_state: int = 1,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
     if dataset_name not in dataset_loader_dict:
