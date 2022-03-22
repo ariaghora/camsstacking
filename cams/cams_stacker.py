@@ -46,6 +46,8 @@ class WeightEstimator(BaseEstimator):
         self.scaler = StandardScaler().fit(X)
         X_nn = self.scaler.transform(X)
 
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
         # Initialize the Sequential model of the neural network
         self.weight_estimator = torch.nn.Sequential(
             torch.nn.Linear(X_nn.shape[1], self.hidden_layer_size),
@@ -54,19 +56,20 @@ class WeightEstimator(BaseEstimator):
             torch.nn.LeakyReLU(),
             torch.nn.Linear(self.hidden_layer_size, y_weights.shape[1]),
             torch.nn.Sigmoid(),
-        )
+        ).to(device)
         optim = torch.optim.Adam(self.weight_estimator.parameters())
-        loss_fn = torch.nn.BCELoss()
+        loss_fn = torch.nn.BCELoss().to(device)
 
         batch_size = min(200, X_nn.shape[0])
         for i in tqdm(range(500), disable=(not self.verbose)):
             for j in range(0, X_nn.shape[0], batch_size):
                 optim.zero_grad()
                 y_hat = self.weight_estimator(
-                    torch.from_numpy(X_nn[j : j + batch_size]).float()
+                    torch.from_numpy(X_nn[j : j + batch_size]).float().to(device)
                 )
                 loss = loss_fn(
-                    y_hat, torch.from_numpy(y_weights[j : j + batch_size]).float()
+                    y_hat,
+                    torch.from_numpy(y_weights[j : j + batch_size]).float().to(device),
                 )
                 loss.backward()
                 optim.step()
@@ -77,9 +80,11 @@ class WeightEstimator(BaseEstimator):
 
         self.weight_estimator.eval()
         with torch.no_grad():
-            y_weights_hat = self.weight_estimator(
-                torch.from_numpy(X_transformed).float()
-            ).numpy()
+            y_weights_hat = (
+                self.weight_estimator(torch.from_numpy(X_transformed).float())
+                .cpu()
+                .numpy()
+            )
 
         return y_weights_hat
 
