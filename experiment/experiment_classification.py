@@ -25,7 +25,7 @@ from experiment.experiment_data_loader import available_datasets, get_dataset
 from tqdm import tqdm
 
 base_estimators = [
-    LogisticRegression(penalty="l1", C=0.1),
+    LogisticRegression(penalty="l1", C=0.1, solver="liblinear"),
     LogisticRegression(penalty="l2", C=0.1),
     DecisionTreeClassifier(),
     GaussianNB(),
