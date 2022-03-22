@@ -20,7 +20,7 @@ from tqdm import tqdm
 class _WeightEstimator(BaseEstimator):
     """Estimate each base estimator's weight for each sample
 
-    The weight estimator is implemented as a neural network with two hidden layers.
+    The weight estimator is implemented as a neural network with one hidden layers.
     The output layer uses a sigmoid activation function. The network is trained
     by minimizing cross-entropy loss, since we want to predict some weight that can
     be interpreted as the probability of the base estimator being correct.
@@ -46,14 +46,12 @@ class _WeightEstimator(BaseEstimator):
 
     def build_network(self, input_neurons: int, output_neurons: int) -> torch.nn.Module:
         """
-        The network is a simple feed-forward neural network with two hidden layers.
+        The network is a simple feed-forward neural network with one hidden layers.
         TODO: provide flexibility to the user to choose the number of hidden layers,
               even the whole network architecture.
         """
         net = torch.nn.Sequential(
             torch.nn.Linear(input_neurons, self.hidden_layer_size),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(self.hidden_layer_size, self.hidden_layer_size),
             torch.nn.LeakyReLU(),
             torch.nn.Linear(self.hidden_layer_size, output_neurons),
             torch.nn.Softmax(1),

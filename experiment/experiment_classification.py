@@ -14,7 +14,6 @@ from sklearn.tree import DecisionTreeClassifier
 sys.path.append("../")
 
 
-import os
 import warnings
 
 import numpy as np
@@ -33,8 +32,9 @@ base_estimators = [
 
 cams_stacker_params = {
     "base_estimators": base_estimators,
-    "hidden_layer_size": 100,
-    "n_jobs": -1,
+    "hidden_layer_size": 200,
+    "n_iter": 1000,
+    "n_jobs": 1,
     "verbose": False,
 }
 
