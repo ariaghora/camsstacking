@@ -22,8 +22,8 @@ class _WeightEstimator(BaseEstimator):
 
     The weight estimator is implemented as a neural network with two hidden layers.
     The output layer uses a sigmoid activation function. The network is trained
-    by minimizing binary cross-entropy loss, since the problem is formulated as
-    a multioutput binary classification.
+    by minimizing cross-entropy loss, since we want to predict some weight that can
+    be interpreted as the probability of the base estimator being correct.
 
     """
 
@@ -32,11 +32,13 @@ class _WeightEstimator(BaseEstimator):
         hidden_layer_size: int,
         batch_size: Optional[int],
         device: str,
-        verbose: bool = True,
+        n_iter: int,
+        verbose: bool,
     ) -> None:
         self.hidden_layer_size = hidden_layer_size
         self.batch_size = batch_size
         self.device = device
+        self.n_iter = n_iter
         self.verbose = verbose
         self.scaler: StandardScaler = None
         self.net: _WeightEstimator = None
@@ -54,7 +56,7 @@ class _WeightEstimator(BaseEstimator):
             torch.nn.Linear(self.hidden_layer_size, self.hidden_layer_size),
             torch.nn.LeakyReLU(),
             torch.nn.Linear(self.hidden_layer_size, output_neurons),
-            torch.nn.Sigmoid(),
+            torch.nn.Softmax(1),
         ).to(self.device)
         return net
 
@@ -74,14 +76,18 @@ class _WeightEstimator(BaseEstimator):
         # Initialize the Sequential model of the neural network.
         self.net = self.build_network(X_nn.shape[1], y_weights.shape[1])
         optim = torch.optim.Adam(self.net.parameters())
-        loss_fn = torch.nn.BCELoss().to(self.device)
+
+        # We shall use the cross-entropy loss function.
+        loss_fn = lambda y_hat, y: -torch.mean(torch.log(y_hat) * y)
 
         # We specify the batch_size for the user when they did not specify it.
         if self.batch_size is None:
             self.batch_size = min(200, X_nn.shape[0])
 
         self.losses = []
-        for epoch in tqdm(range(500), disable=(not self.verbose)):
+
+        # The NN training loop.
+        for epoch in tqdm(range(self.n_iter), disable=(not self.verbose)):
             losses_epoch = []
             for iter in range(0, X_nn.shape[0], self.batch_size):
                 optim.zero_grad()
@@ -101,6 +107,7 @@ class _WeightEstimator(BaseEstimator):
 
                 losses_epoch.append(loss.item())
             self.losses.append(np.mean(losses_epoch))
+
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -156,6 +163,7 @@ class CAMSStacker(BaseEstimator):
         refit: bool = True,
         batch_size: Optional[int] = None,
         hidden_layer_size: int = 100,
+        n_iter: int = 500,
         device: Optional[str] = None,
         verbose: bool = True,
         n_jobs: int = 1,
@@ -167,6 +175,7 @@ class CAMSStacker(BaseEstimator):
         self.refit = refit
         self.batch_size = batch_size
         self.hidden_layer_size = hidden_layer_size
+        self.n_iter = n_iter
         self.device = device
         self.verbose = verbose
         self.n_jobs = n_jobs
