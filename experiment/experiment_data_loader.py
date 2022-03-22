@@ -35,6 +35,18 @@ def load_phishing_wrapper() -> Tuple[np.ndarray, np.ndarray]:
     return fetch_openml(name="PhishingWebsites", return_X_y=True, as_frame=False)
 
 
+def load_wine_wrapper() -> Tuple[np.ndarray, np.ndarray]:
+    return fetch_openml(name="wine", return_X_y=True, as_frame=False)
+
+
+def load_phoneme_wrapper() -> Tuple[np.ndarray, np.ndarray]:
+    return fetch_openml(name="phoneme", return_X_y=True, as_frame=False)
+
+
+def load_eeg_eye_state_wrapper() -> Tuple[np.ndarray, np.ndarray]:
+    return fetch_openml(name="eeg-eye-state", return_X_y=True, as_frame=False)
+
+
 dataset_loader_dict = {
     "faces": load_faces_wrapper,
     "breast_cancer": load_breast_cancer_wrapper,
@@ -43,6 +55,9 @@ dataset_loader_dict = {
     "japanese_vowels": load_japanese_vowels_wrapper,
     "vowels": load_vowels_wrapper,
     "phishing": load_phishing_wrapper,
+    "wine": load_wine_wrapper,
+    "phoneme": load_phoneme_wrapper,
+    "eeg_eye_state": load_eeg_eye_state_wrapper,
 }
 
 available_datasets = list(dataset_loader_dict.keys())

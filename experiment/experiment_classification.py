@@ -25,17 +25,18 @@ from tqdm import tqdm
 
 base_estimators = [
     LogisticRegression(),
-    DecisionTreeClassifier(),
+    DecisionTreeClassifier(max_depth=5),
     GaussianNB(),
 ]
 
 cams_stacker_params = {
     "calibration_method": "sigmoid",
     "base_estimators": base_estimators,
-    "hidden_layer_size": 200,
+    "hidden_layer_size": 100,
     "n_iter": 3000,
     "n_jobs": 1,
     "verbose": False,
+    "cv_stacking": 5,
 }
 
 linear_stack_params = {"estimators": [(str(e), e) for e in base_estimators]}
@@ -60,11 +61,19 @@ def run_training(datasets: Optional[List[str]] = None, random_state: int = 1) ->
         cams_stacker = CAMSStacker(**cams_stacker_params).fit(X_train, y_train)
         linear_stacker = StackingClassifier(**linear_stack_params).fit(X_train, y_train)
 
+        base_estimators = [
+            e.fit(X_train, y_train) for e in cams_stacker.base_estimators
+        ]
+
         score_cams_stacker = cams_stacker.score(X_test, y_test)
         score_linear_stacker = linear_stacker.score(X_test, y_test)
 
         training_result.loc[dataset_name, "cams_stacker"] = score_cams_stacker
         training_result.loc[dataset_name, "linear_stacker"] = score_linear_stacker
+        for base_estimator in base_estimators:
+            training_result.loc[
+                dataset_name, base_estimator.__class__.__name__
+            ] = base_estimator.score(X_test, y_test)
 
         # Save loss history
         plt.plot(cams_stacker.weight_estimator.losses)
