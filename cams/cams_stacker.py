@@ -6,6 +6,7 @@ makes use of neural network to estimate the importance of each base model.
 from typing import List, Optional
 
 import numpy as np
+from sklearn.exceptions import NotFittedError
 import torch
 from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator
@@ -245,7 +246,15 @@ class CAMSStacker(BaseEstimator):
         self.is_fitted_ = True
         return self
 
-    def predict(self, X):
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict the probability of each class for each sample
+        """
+        # Check if the model is fitted
+        if not self.is_fitted_:
+            raise NotFittedError("The model is not fitted yet.")
+
+        # Calculate the weight of each base estimator for each sample.
         y_weights_hat = self.weight_estimator.predict(X)
 
         weighted_votes = sum(
@@ -254,6 +263,19 @@ class CAMSStacker(BaseEstimator):
                 for i, e in enumerate(self.cal_estimators)
             ]
         )
+
+        # To interpret the output as probabilities, we need to normalize
+        # the weighted votes.
+        normalized_weighted_votes = weighted_votes / weighted_votes.sum(
+            1, keepdims=True
+        )
+        return normalized_weighted_votes
+
+    def predict(self, X):
+        """
+        Predict the class for each sample
+        """
+        weighted_votes = self.predict_proba(X)
 
         # Finally return the discrete class predictions
         labels = self.encoder.inverse_transform(weighted_votes).squeeze()

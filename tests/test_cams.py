@@ -49,4 +49,11 @@ def test_predict_proba() -> None:
         base_estimators=[LogisticRegression(), DecisionTreeClassifier()]
     ).fit(X, y)
 
+    # The output of predict_proba should be a 2D array of shape
+    # (n_samples, n_classes)
     assert clf.predict_proba(X).shape == (X.shape[0], 3)
+
+    # The sum of the probabilities should be 1, but due to numerical
+    # errors it is not always the case. So we check that the sum is
+    # close to 1 within a small margin.
+    assert (clf.predict_proba(X).sum(axis=1).max() - 1) < 1e-10
