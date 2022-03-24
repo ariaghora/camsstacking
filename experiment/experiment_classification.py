@@ -16,6 +16,7 @@ sys.path.append("../")
 
 import warnings
 
+import joblib
 import numpy as np
 import pandas as pd
 import torch
@@ -25,7 +26,7 @@ from tqdm import tqdm
 
 base_estimators = [
     LogisticRegression(),
-    DecisionTreeClassifier(max_depth=5),
+    DecisionTreeClassifier(),
     GaussianNB(),
 ]
 
@@ -80,6 +81,14 @@ def run_training(datasets: Optional[List[str]] = None, random_state: int = 1) ->
         plt.xlabel("Iteration")
         plt.savefig(f"output/{dataset_name}_loss.png")
         plt.close()
+
+        # Save cams_stacker to file
+        joblib.dump(cams_stacker, f"output/{dataset_name}_cams_stacker.pkl")
+
+        # Save the training and test split to file for evaluation later
+        joblib.dump(
+            (X_train, X_test, y_train, y_test), f"output/{dataset_name}_data.pkl"
+        )
 
     training_result.to_csv("output/training_result.csv")
     print("Training result saved to output/training_result.csv")
