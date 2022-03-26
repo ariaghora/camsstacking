@@ -25,7 +25,8 @@ df_training_result.index = df_training_result.index.str.title()
 
 # New column names
 new_column_names = [
-    "CAMSStacker",
+    "CAMS (proba)",
+    "CAMS (vote)",
     "LinearStacker",
     "LR",
     "DT",
@@ -50,8 +51,7 @@ for row in df_training_result.iterrows():
 # save the training result to latex table.
 df_training_result.to_latex(
     "report/training_result.tex",
-    # float_format="%.2f",
-    caption="Training result (in \%)",
+    caption="Training result, evaluated with accuracy score (in \%)",
     escape=False,
     column_format="l" + "r" * len(new_column_names),
     label="tab:training_result",
@@ -63,8 +63,9 @@ for dataset in available_datasets:
     X_train, X_test, y_train, y_test = joblib.load(f"output/{dataset}_data.pkl")
 
     weights = clf.weight_estimator.predict(X_test)
-    plt.boxplot(weights, labels=new_column_names[2:])
-    plt.xticks(ticks=range(1, len(new_column_names) - 1), labels=new_column_names[2:])
+    plt.figure(figsize=(5, 5))
+    plt.boxplot(weights, labels=new_column_names[3:])
+    plt.xticks(ticks=range(1, len(new_column_names) - 2), labels=new_column_names[3:])
     tikzplotlib.save(f"report/{dataset}_weights_distribution.tex")
     plt.close()
 
