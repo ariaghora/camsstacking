@@ -51,7 +51,7 @@ dataset_loader_dict = {
     "japanese_vowels": load_japanese_vowels_wrapper,
     "vowels": load_vowels_wrapper,
     "phishing": load_phishing_wrapper,
-    "wine": load_wine_wrapper,
+    # "wine": load_wine_wrapper,
     "phoneme": load_phoneme_wrapper,
 }
 
