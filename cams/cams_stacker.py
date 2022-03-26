@@ -288,10 +288,39 @@ class CAMSStacker(BaseEstimator):
         )
         return normalized_weighted_votes
 
-    def predict(self, X):
+    def predict_by_vote(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict the class by vote
+        """
+        # Check if the model is fitted
+        if not self.is_fitted_:
+            raise NotFittedError("The model is not fitted yet.")
+
+        # Calculate the weight of each base estimator for each sample.
+        y_weights_hat = self.weight_estimator.predict(X)
+
+        # Predict labels by vote using base estimators
+        y_hat = [e.predict(X) for i, e in enumerate(self.cal_estimators)]
+        y_hat = np.array(y_hat).T
+        labels = []
+        for i, row in enumerate(y_hat):
+            counter = dict()
+            for j, label in enumerate(row):
+                if label not in counter:
+                    counter[label] = 0
+                counter[label] += y_weights_hat[i, j]
+            labels.append(max(counter, key=counter.get))
+        return np.array(labels)
+
+    def predict(self, X: np.ndarray, predict_mode: Optional[str] = None) -> np.ndarray:
         """
         Predict the class for each sample
         """
+        if (predict_mode is None) or (predict_mode == "proba"):
+            return self.predict_by_weighted_class_probability(X)
+        return self.predict_by_vote(X)
+
+    def predict_by_weighted_class_probability(self, X: np.ndarray) -> np.ndarray:
         weighted_votes = self.predict_proba(X)
 
         # Finally return the discrete class predictions
