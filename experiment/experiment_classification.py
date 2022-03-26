@@ -66,10 +66,14 @@ def run_training(datasets: Optional[List[str]] = None, random_state: int = 1) ->
             e.fit(X_train, y_train) for e in cams_stacker.base_estimators
         ]
 
-        score_cams_stacker = cams_stacker.score(X_test, y_test)
+        score_cams_stacker_proba = cams_stacker.score(X_test, y_test)
+        score_cams_stacker_vote = np.mean(
+            cams_stacker.predict(X_test, predict_mode="vote") == y_test
+        )
         score_linear_stacker = linear_stacker.score(X_test, y_test)
 
-        training_result.loc[dataset_name, "cams_stacker"] = score_cams_stacker
+        training_result.loc[dataset_name, "cams_stacker"] = score_cams_stacker_proba
+        training_result.loc[dataset_name, "cams_stacker_vote"] = score_cams_stacker_vote
         training_result.loc[dataset_name, "linear_stacker"] = score_linear_stacker
         for base_estimator in base_estimators:
             training_result.loc[
